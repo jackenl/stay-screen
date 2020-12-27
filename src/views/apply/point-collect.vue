@@ -17,7 +17,7 @@ import LoadMore from '@/components/loadMore';
 export default {
   mixins: [stayScreenMixin],
   components: {
-    LoadMore
+    LoadMore,
   },
   data() {
     return {
@@ -29,7 +29,6 @@ export default {
   },
   created() {
     this.stayScreenCallback = this.stayScreenHandler;
-    this.stayInit();
     // 下拉加载更多
     this.onPageScroll(this.onPullDownFresh);
   },
@@ -54,10 +53,16 @@ export default {
           this.list.push(len + i);
         }
         this.loadingStatus = 'more';
+        this.stayInit();
       }, 1000);
     },
     stayScreenHandler() {
-      const screenItems = this.getScreenItems();
+      const options = {
+        topHeight: 0,
+        bottomHeight: 0,
+        gap: 20,
+      };
+      const screenItems = this.getScreenItems(options);
       screenItems.forEach((item) => {
         // 检测是否已经上报过
         const index = this.collectedList.indexOf(item);
@@ -65,11 +70,11 @@ export default {
           console.log('埋点上报：', item);
           this.collectedList.push(item);
         }
-      })
+      });
     },
-    getScreenItems() {
-      const firstIndex = this.searchScreenFirstItem(0, 20);
-      const lastIndex = this.searchScreenLastItem(0, 20);
+    getScreenItems({ topHeight, bottomHeight, gap }) {
+      const firstIndex = this.searchScreenFirstItem(topHeight, gap);
+      const lastIndex = this.searchScreenLastItem(bottomHeight, gap);
       const screenItems = this.list.slice(firstIndex, lastIndex + 1);
       return screenItems;
     },
@@ -81,7 +86,8 @@ export default {
     searchScreenFirstItem(topHeight, gap) {
       topHeight = topHeight || 0;
       gap = gap || 0;
-      const half = gap / 2;
+      const clientHeight = document.documentElement.clientHeight || document.body.clientHeight;
+      const screeenTop = topHeight;
       const listItems = this.$refs.listItem;
       if (Array.isArray(listItems)) {
         let low = 0;
@@ -90,17 +96,18 @@ export default {
         while (low <= high) {
           mid = Math.floor((low + high) / 2);
           const itemRect = listItems[mid].getBoundingClientRect();
-          if (itemRect.top + itemRect.height + half < topHeight) {
+          if (itemRect.top + itemRect.height + gap < screeenTop) {
             low = mid + 1;
-          } else if (itemRect.top - half > topHeight) {
+          } else if (itemRect.top > screeenTop) {
             high = mid - 1;
           } else {
-            return mid;
+            // 返回screenTop处于item元素高度之间的下一个元素索引
+            // 当屏幕窗口大小小于元素高度时，返回当前元素索引
+            return itemRect.height < clientHeight ? mid + 1 : mid;
           }
         }
-        return 0;
       }
-      return listItems ? 0 : -1;
+      return 0;
     },
     /**
      * 获取最后一个在视图窗口item元素索引
@@ -110,9 +117,8 @@ export default {
     searchScreenLastItem(bottomHeight, gap) {
       bottomHeight = bottomHeight || 0;
       gap = gap || 0;
-      const half = gap / 2;
-      const scrollTop = document.documentElement.clientHeight || document.body.clientHeight;
-      const scrollBottom = scrollTop - bottomHeight;
+      const clientHeight = document.documentElement.clientHeight || document.body.clientHeight;
+      const screenBottom = clientHeight - bottomHeight;
       const listItems = this.$refs.listItem;
       let len = 0;
       if (Array.isArray(listItems)) {
@@ -123,17 +129,18 @@ export default {
         while (low <= high) {
           mid = Math.floor((low + high) / 2);
           const itemRect = listItems[mid].getBoundingClientRect();
-          if (itemRect.top + itemRect.height + half < scrollBottom) {
+          if (itemRect.top + itemRect.height < screenBottom) {
             low = mid + 1;
-          } else if (itemRect.top - half > scrollBottom) {
+          } else if (itemRect.top - gap > screenBottom) {
             high = mid - 1;
           } else {
-            return mid;
+            // 返回screenBottom处于item元素高度之间的上一个元素索引
+            // 当屏幕窗口大小小于元素高度时，返回当前元素索引
+            return itemRect.height < clientHeight ? mid - 1 : mid;
           }
         }
-        return len - 1;
       }
-      return listItems ? len - 1 : -1;
+      return len - 1;
     },
   },
 };
